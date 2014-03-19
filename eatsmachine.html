@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+	<title>Eats Machine</title>
+	<meta name="description" content="The cool way to discover local mom and pop restaurants. Designed for people on the go who love to eat.">
+	<meta name="viewport" content="width=device-width">
+	<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+	<!-- Place favicon.ico and apple-touch-icon.png in the root directory -->
+	<link rel="icon" href="favicon.ico" type="image/x-icon"> 
+	<link rel="shortcut icon" href="favicon.ico" type="image/x-icon"> 
+	<link rel="stylesheet" href="css/normalize.css">
+	<link rel="stylesheet" href="css/main.css">
+	<script src="js/vendor/modernizr-2.6.2.min.js"></script>
+	<style type="text/css">
+		html { height: 100% }
+		body { height: 100%; margin: 0; padding: 0 }
+		#map_canvas { height: 100% }
+	</style>
+	<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyClDacISuPuLhV_0tC8n4VEkWfOihTxMPg&sensor=true"></script>
+	<script>window.jQuery || document.write('<script src="js/vendor/jquery-1.8.2.min.js"><\/script>')</script>
+	<script src="js/plugins.js"></script>
+	<script src="js/infobox.js" type="text/javascript"></script>
+
+	<script type="text/javascript"> 
+		var gmarkers = []; //gmarkers are markers on the map that contains the information
+		var markerInfo = []; // [] means arrays. markerInfo has additional info like ratings, cost, categories, etc
+
+		function initialize() {
+
+			// Create an array of styles.
+			var styles =[{
+				"featureType": "road",
+				"elementType": "geometry",
+				"stylers": [
+				  { "lightness": 100 },
+				  { "visibility": "simplified" }
+				]
+			},{
+				"stylers": [
+				  { "hue": "#00b2ff" }
+				]
+			},{
+				"featureType": "road",
+				"elementType": "labels.text.stroke",
+				"stylers": [
+				  { "saturation": -100 },
+				  { "lightness": 100 },
+				  { "visibility": "simplified" }
+				]
+			},{
+				"featureType": "transit.station",
+				"stylers": [
+				  { "hue": "#ff1100" },
+				  { "lightness": 1 }
+				]
+			},{
+				"featureType": "poi.business",
+				"elementType": "labels",
+				"stylers": [
+				  { "visibility": "off" }
+				]
+			}];
+
+			// Create a new StyledMapType object, passing it the array of styles,
+			// as well as the name to be displayed on the map type control.
+			var styledMap = new google.maps.StyledMapType(styles,
+					{name:"Styled Map"});
+
+			var myOptions = {
+				center:new google.maps.LatLng(40.732428, -73.993972),
+				zoom:15,
+				minZoom:13,
+				panControl:false,
+				streetViewControl:false,
+				mapTypeControl:false,
+				zoomControl:false,
+				mapTypeIds:[google.maps.MapTypeId.ROADMAP, 'map_style']
+			}
+
+			var map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+
+			//Associate the styled map with the MapTypeId and set it to display.
+			map.mapTypes.set('map_style', styledMap);
+			map.setMapTypeId('map_style');
+
+			google.maps.event.addListener(map, 'click', function () {
+				infowindow.close();
+			});
+			setMarkers(map, restaurants);
+		}
+
+		var icons = new Array();
+
+		function getMarkerImage(iconNumber) {
+			if ((typeof(iconNumber) == "undefined") || (iconNumber == null)) {
+				iconNumber = "0";
+			}
+			icons[iconNumber] = new google.maps.MarkerImage("img/" + iconNumber + ".png",
+					// This marker is 20 pixels wide by 34 pixels tall.
+					new google.maps.Size(58, 58),
+					// The origin for this image is 0,0.
+					new google.maps.Point(0, 0),
+					// The anchor for this image is at 6,20.
+					new google.maps.Point(20, 70));
+			return icons[iconNumber];
+		}
+		// Marker sizes are expressed as a Size of X,Y
+		// where the origin of the image (0,0) is located
+		// in the top left of the image.
+
+		// Origins, anchor positions and coordinates of the marker
+		// increase in the X direction to the right and in
+		// the Y direction down.
+
+		var infowindow = new InfoBox(
+		{
+			closeBoxURL:'img/icons/close.png',
+			size:new google.maps.Size(150, 50),
+			pixelOffset:new google.maps.Size(45, -290),
+			boxStyle:{
+				background:"white",
+				padding:"0",
+				width:"auto",
+				margin:"1px 0 0 0",
+				height:"255px"
+			},
+			closeBoxMargin:"6px 6px 2px 2px"
+		});
+
+		// This function picks up the click and opens the corresponding info window
+		function myclick(i) {
+			google.maps.event.trigger(gmarkers[i], "click");
+		}
+
+		function createMarker(map, latlng, html, iconName, name, rating) {
+			var contentString = html;
+			var marker = new google.maps.Marker({
+				position:latlng,
+				map:map,
+				icon:getMarkerImage(iconName),
+				title:name,
+				zIndex:Math.round(latlng.lat() * -100000) << 5,
+				visible:true
+			});
+
+			google.maps.event.addListener(marker, 'click', function () {
+				infowindow.setContent(contentString);
+				infowindow.open(map, marker);
+				infowindow.setOptions({maxWidth:100});
+			});
+
+			var markerData = {
+				marker: marker,
+				name: name,
+				rating: rating
+			}
+
+			// save the info we need to use later for the side_bar
+			gmarkers.push(marker);
+			markerInfo.push(markerData);
+		}
+
+		google.maps.event.addListener(infowindow, 'domready', function(){
+			// jQuery Code
+			// When the document loads do everything inside here ...
+
+			// When a link is clicked
+			$("a.tab").click(function () {
+
+				// switch all tabs off
+				$(".activetab").removeClass("activetab");
+
+				// switch this tab on
+				$(this).addClass("activetab");
+
+				// slide all content up
+				$(".content").hide('fast');
+
+				// slide this content up
+				var content_show = $(this).attr("title");
+				$("#"+content_show).show('fast');
+
+			});
+		});
+
+		//=======================================Toggle/Filtering====================================================
+
+		function toggleRating(star){
+			if(document.getElementById("checkbox-1-" + star).checked == false){
+				// markerInfo.length is the number of restaurants
+				for(var i = 0; i < markerInfo.length; i++){
+					if (markerInfo[i].rating == star-1) {
+						gmarkers[i].setVisible(false);
+						document.getElementById(markerInfo[i].name)
+							.style.display = "none";
+					}
+				}
+			}
+			if(document.getElementById("checkbox-1-" + star).checked == true){
+				// markerInfo.length is the number of restaurants
+				for(var i = 0; i < markerInfo.length; i++){
+					if (markerInfo[i].rating == star-1) {
+						gmarkers[i].setVisible(true);
+						document.getElementById(markerInfo[i].name)
+							.style.display = "block";
+					}
+				}
+			}
+		}
+
+		//=======================================END Toggle/Filtering================================================
+
+		function setMarkers(map, locations) {
+			// Add markers to the map
+
+			for (var i = 0; i < locations.length; i++) {
+				var restaurant = locations[i]; 
+							//anything in array [] is position
+							//restaurant[0]; 0th position is the html code for the restaurant. 	
+							//scroll below
+				var myLatLng = new google.maps.LatLng(restaurant[1], restaurant[2]);
+				var marker = createMarker(map, myLatLng, restaurant[0], restaurant[3],
+						restaurant[4], restaurant[5]);
+			}
+
+			/*geolocation api and google api to find users location and place custom marker*/
+			/*function setMarkerTypes(){
+			 markerImages.userMarkerImage=new google.maps.MarkerImage("img/0.png",
+			 new google.maps.Size(30,30),
+			 new google.maps.Point(0,0),
+			 new google.maps.Point(15,13));*/
+
+			$("#findPosition").bind("click", function () {
+				// Check to see if this browser supports geolocation.
+				if (navigator.geolocation) {
+					$(document).ready(function () {
+						$('#alertLocation').show();
+						setTimeout(function () {
+							$('#alertLocation').fadeOut("slow", function () {
+								$('#alertLocation').remove();
+							});
+						}, 7000);
+					});
+
+					var image = new google.maps.MarkerImage('img/your_position.png',
+							new google.maps.Size(60, 58),
+							// The origin for this image is 0,0.
+							new google.maps.Point(0, 0),
+							// The anchor for this image is at 6,20.
+							new google.maps.Point(9, 34)
+					);
+
+					function hasPosition(position) {
+						var point = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+						map.panTo(point);
+						marker = new google.maps.Marker({
+							position:point,
+							map:map,
+							title:"You are here",
+							icon:image
+						});
+					}
+
+					navigator.geolocation.getCurrentPosition(hasPosition);
+				}
+			});
+
+			//zoom in controls
+			$(".zoomIndicatorButton").each(function () {
+				$(this).bind("click", function () {
+					$("#mapZoom_" + map.getZoom())
+							.removeClass("activeZoom");
+					map.setZoom(Number($(this).attr("id").split("_")[1])
+					);
+					$(this).addClass("activeZoom");
+					return false
+				})
+			});
+
+			$("#mapZoomOut").bind("click", function () {
+						var a = map.getZoom();
+						$("#mapZoom_" + a).removeClass("activeZoom");
+						a--;
+						map.setZoom(a);
+						$("#mapZoom_" + a).addClass("activeZoom");
+						return false
+					}
+			);
+
+			$("#mapZoomIn").bind("click", function () {
+				var a = map.getZoom();
+				$("#mapZoom_" + a).removeClass("activeZoom");
+				a++;
+				map.setZoom(a);
+				$("#mapZoom_" + a).addClass("activeZoom");
+				return false
+			});
+		}
+
+		/* * Data for the markers consisting of a name, a LatLng and a zIndex for
+		 * the order in which these markers should display on top of each
+		 * other.
+		 */
+
+		/*  restaurants = [0, 1, 2, 3, 4, 5]
+			0th position is the html code for the restaurant
+			1st position is the latitude
+			2nd position is the longitude
+			3rd position is the icon file name
+			4th position is the name of restaurant
+			5th position is the rating
+
+		 */
+		var restaurants = [
+			['<h1 class="name"><b>BaoHaus</b></h1>\
+				<div id="info">\
+				<ul class="profile_tabs">\
+					<li><a href="#" title="content_1" class="tab active">Info</a></li>\
+					<li><a href="#" title="content_2" class="tab">Photos</a></li>\
+					<li><a href="#" title="content_3" class="tab">Menu</a></li>\
+				</ul>\
+				<div id="content_1" class="content">\
+					<ul>\
+						<li class="info">\
+							<span>\
+							Taiwanese\
+							<br>238 E 14th St\
+							<br>(646) 669-8889</span>\
+							<span class="hours"><br><b> </b>\
+							<br>Mon-Sat 11a - 10p\
+							<br>Sun 12p - 9p\
+							</span>\
+						</li>\
+						<li><span class="time_icons time_1" title="15-30 mins"></span></li>\
+					</ul>\
+					<p class="des">Nice delicious soft buns and bumping music.</p>\
+				</div>\
+				<div id="content_2" class="content">\
+					<iframe allowTransparency="true" frameborder="0" scrolling="no" src="http://www.foodspotting.com/widgets/sightings?background=EEEEEE&amp;border=none&amp;border_radius=0&amp;height=174&amp;id=217947&amp;image_border=regular&amp;image_border_width=1&amp;order=best&amp;page=1&amp;query=&amp;size=small&amp;type=place&amp;width=290&amp;x=3&amp;y=1" style="border:none; overflow:hidden; width:290px; height: 174px">\
+					</iframe>\
+				</div>\
+				<div id="content_3" class="content">\
+					<ul>\
+						<li>\
+							<h4>Baos</h4>\
+							<ul>\
+								<li><b>Chairman Bao - $3.50</b>braised all natural berkshire pork belly served with: crushed peanut, cilantro, haus relish, and taiwanese red sugar</li>\
+								<li><b>Haus Bao - $3.90</b>braised all natural creekstone beef cheek served with: crushed peanut, cilantro, haus relish, and taiwanese red sugar</li>\
+								<li><b>Uncle Jesse (V) - $2.99</b>organic fried tofu served with: crushed peanut, cilantro, haus sauce, and taiwanese red sugar</li>\
+							</ul>\
+						</li>\
+						<li>\
+							<h4>Main Dishes</h4>\
+							<ul>\
+								<li>Entree Dish 1 - $5</li>\
+								<li>Dish Numero Dos - $6</li>\
+								<li>Fried Tres - $8</li>\
+							</ul>\
+						</li>\
+					</ul>\
+				</div>\
+			</div>', 40.732386, -73.985791, "baohaus", "Baohaus", 4],
+
+			['<h1 class="name"><b>Num Pang Sandwich Shop</b></h1>\
+				<div id="info">\
+				<ul class="profile_tabs">\
+					<li><a href="#" title="content_1" class="tab active">Info</a></li>\
+					<li><a href="#" title="content_2" class="tab">Explore</a></li>\
+					<li><a href="#" title="content_3" class="tab">Menu</a></li>\
+				</ul>\
+				<div id="content_1" class="content">\
+					<ul>\
+						<li><i>Cambodian</i>\
+							<br>21 E 12th St\
+							<br>New York, NY 10003\
+							<br><br><b><b>Hours:</b> Mon-Sat 11 am - 10 pm | Sun 12 pm - 9 pm\
+							<br><small>(646) 669-8889\
+							<br><a href="#">www.baohausnyc.com</a>\
+						</li>\
+						<li><small>Nice delicious soft buns and bumping music.</small></li>\
+					</ul>\
+				</div>\
+				<div id="content_2" class="content">\
+					<iframe allowTransparency="true" frameborder="0" scrolling="no" src="http://www.foodspotting.com/widgets/sightings?background=EEEEEE&amp;border=none&amp;border_radius=0&amp;height=174&amp;id=217947&amp;image_border=regular&amp;image_border_width=1&amp;order=best&amp;page=1&amp;query=&amp;size=small&amp;type=place&amp;width=290&amp;x=3&amp;y=1" style="border:none; overflow:hidden; width:290px; height: 174px">\
+					</iframe>\
+				</div>\
+				<div id="content_3" class="content">\
+					<ul>\
+						<li>\
+							<h5>Appetizers</h5>\
+							<ul>\
+								<li>Yum Dish 1 - $4</li>\
+								<li>Dish Numero Dos - $5</li>\
+								<li>Fried Tres - $7</li>\
+							</ul>\
+						</li>\
+						<li>\
+							<h5>Main Dishes</h5>\
+							<ul>\
+							Entree Dish 1 - $5<br>Dish Numero Dos - $6<br>Fried Tres - $8</small></li>\
+					</ul>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.734258, -73.993192, "num_pang", "Num Pang", 4],
+
+
+			['<h1 class="name"><b>Murrays Bagels</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Bagels</span><br>\
+					<span>500 Avenue of the Americas</span><br>\
+					<span>New York, NY 10011</span><br>\
+					<span><b>Hours:</b> Mon-Fri 6 am - 9 pm | Sa-Sun 6 am - 8pm</span><br>\
+					<span>(212) 462-2830</span><br>\
+					<a href="#">www.murraysbagels.com</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.736329, -73.997162, "bagel", "Murray's Bagels", 3],
+
+			['<h1 class="name"><b>BLT Burger</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Burgers</span><br>\
+					<span>470 6th Ave</span><br>\
+					<span>New York, NY 10010</span><br>\
+					<span><b>Hours:</b> Mon-Sun 11:30 am - 11 pm</span><br>\
+					<span>(212) 243-8226</span><br>\
+					<a href="#">http://www.bltburger.com</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.735616468077, -73.9981126785278, "burger_newcard", "BLT Burger", 4],
+
+			['<h1 class="name"><b>Dogmatic Restaurant</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Hot Dogs</span><br>\
+					<span>26 E 17th St</span><br>\
+					<span>New York, NY 10003</span><br>\
+					<span><b>Hours:</b> Mon-Sat 11 am - 9 pm | Sun 12 pm - 7 pm</span><br>\
+					<span>(212) 414-0600</span><br>\
+					<a href="#">http://eatdogmatic.com</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.737346078826, -73.991090182542, "tacos", "Dogmatic Restaurant", 2],
+
+			['<h1 class="name"><b>Meatball Obsession</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Italian</span><br>\
+					<span>510 Avenue of the Americas</span><br>\
+					<span>New York, NY 10011</span><br>\
+					<span><b>Hours:</b> Mon-Fri 9 am - 11 pm | Sat 10 am - 11 pm | Sun 11 am - 11 pm</span><br>\
+					<span>(212) 260-8646</span><br>\
+					<a href="#">http://www.meatballobsession.com</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.7367057, -73.9973115, "meatball", "Meatball Obsession", 1],
+
+			['<h1 class="name"><b>Mapi Expresso And Sandwich Bar</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Sandwiches</span><br>\
+					<span>1 W 13th St</span><br>\
+					<span>New York, NY 10011</span><br>\
+					<span><b>Hours:</b> Mon-Fri 7 am - 7 pm | Sat 9 am - 4 pm</span><br>\
+					<span>(212) 929-1041</span><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.7356009, -73.9945836, "bagel", "Mapi Expresso And Sandwich Bar", 4],
+
+			['<h1 class="name"><b>Tortaria</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Mexican</span><br>\
+					<span>94 University Pl</span><br>\
+					<span>New York, NY 10003</span><br>\
+					<span><b>Hours:</b> Mon-Thu, Sun 11 am - 12 am | Fri-Sat 11 am - 1 am</span><br>\
+					<span>(212) 776-1830</span><br>\
+					<a href="#">http://www.tortaria-nyc.com/</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.733873, -73.99305, "tacos", "Tortaria", 4],
+
+			['<h1 class="name"><b>The Grey Dogs Coffee</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Sandwiches</span><br>\
+					<span>90 University Pl</span><br>\
+					<span>New York, NY 10003</span><br>\
+					<span><b>Hours:</b> Mon-Fri 6:30 am - 11:30 pm | Sat-Sun 7 am - 11:30 pm</span><br>\
+					<span>(212) 414-4739</span><br>\
+					<a href="#">http://www.thegreydog.com</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.7338159, -73.9930105, "sandwich", "The Grey Dog's Coffee", 3],
+
+			['<h1 class="name"><b>Vive La Crepe</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">French</span><br>\
+					<span>114 University Pl</span><br>\
+					<span>New York, NY 10003</span><br>\
+					<span><b>Hours:</b> Mon-Sat 8 am - 12 am</span><br>\
+					<span>(855) 273-7369</span><br>\
+					<a href="#">http://vivelacrepe.fr</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.734288, -73.99284, "tacos", "Vive La Crepe", 5],
+
+			['<h1 class="name"><b>Otafuku</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">French</span><br>\
+					<span>236 E 9th St</span><br>\
+					<span>New York, NY 10003</span><br>\
+					<span><b>Hours:</b> Mon-Thu 1 pm - 10 pm | Fri-Sat 12 pm - 11 pm | Sun 12 pm - 10 pm</span><br>\
+					<span>(212) 353-8503</span><br>\
+					<a href="#">http://otafukunyc.com/</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.7293582, -73.9878306, "noodles", "Otafuku", 2],
+
+			['<h1 class="name"><b>The Kati Roll Company</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Indian</span><br>\
+					<span>99 MacDougal St</span><br>\
+					<span>New York, NY 10012</span><br>\
+					<span><b>Hours:</b> Mon-Thur 11:30am - 2am | Fri-Sat 11:30am - 5am | Sun 11:30am - 2am</span><br>\
+					<span>(212) 420-6497</span><br>\
+					<a href="#">http://www.thekatirollcompany.com</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.7296114, -74.0009694, "tacos", "The Kati Roll Company", 1],
+
+			['<h1 class="name"><b>Artichoke Basilles Pizza</b></h1>\
+				<div id="info">\
+				<div class="profile_tabs">\
+					<a href="#" class="tab" id="active">info</a>\
+					<a href="#" class="tab">explore</a>\
+					<a href="#" class="tab">menu</a>\
+					<a href="#" class="tab">reviews</a>\
+				</div>\
+				<div id="info_slide" class="tab">\
+					<span id="cat">Pizza</span><br>\
+					<span>328 E 14th St</span><br>\
+					<span>New York, NY 10003</span><br>\
+					<span><b>Hours:</b> Mon-Thu, Sun 11 am - 4 am | Fri-Sat 11 am - 5:30 am</span><br>\
+					<span>(212) 228-2004</span><br>\
+					<a href="#">http://www.artichokepizza.com</a><br>\
+					<div id="line"></div>\
+						<span id="main_des"><p>Nice delicious toasty bagels with a quick line</p></span>\
+					</div>\
+				</div>\
+				<div id="pointer">\
+				</div>', 40.731588, -73.983921, "pizza", "Artichoke Basille's Pizza", 4],
+		];
+
+
+		function detectBrowser() {
+			var useragent = navigator.userAgent;
+			var mapdiv = document.getElementById("map_canvas");
+
+			if (useragent.indexOf('iPhone') != -1 || useragent.indexOf('Android') != -1 ) {
+				mapdiv.style.width = '100%';
+				mapdiv.style.height = '100%';
+			} else {
+				mapdiv.style.width = '600px';
+				mapdiv.style.height = '800px';
+			}
+		}
+
+
+		$(document).ready(function(){
+
+			if (!$.browser.opera) {
+
+				// select element styling
+				$('select.select').each(function(){
+					var title = $(this).attr('title');
+					if( $('option:selected', this).val() != ''  ) title = $('option:selected',this).text();
+					$(this)
+						.css({'z-index':10,'opacity':0,'-khtml-appearance':'none'})
+						.after('<span class="select">' + title + '</span>')
+						.change(function(){
+							val = $('option:selected',this).text();
+							$(this).next().text(val);
+						})
+				});
+
+			};
+			
+		});
+
+			// When the document loads do everything inside here ...
+		$(document).ready(function(){
+			// When a link is clicked
+			$("a.hometab").click(function () {
+				// switch all tabs off
+				$(".homeactive").removeClass("homeactive");
+				
+				// switch this tab on
+				$(this).addClass("homeactive");
+				
+				// slide all content up
+				$(".homecontent").slideUp('fast');
+				
+				// slide this content up
+				var content_show = $(this).attr("title");
+				$("#"+content_show).slideDown('fast');
+			});
+		});
+
+
+		function toggle(source) {
+			checkboxes = document.getElementsByName('cost');
+			checkboxes2 = document.getElementsByName('rating');
+			for(var i in checkboxes)
+			checkboxes[i].checked = source.checked;
+			for(var i in checkboxes2)
+			checkboxes2[i].checked = source.checked;
+			if(document.getElementById("checkbox-5-1").checked == false){
+				// markerInfo.length is the number of restaurants
+				for(var i = 0; i < markerInfo.length; i++){
+					gmarkers[i].setVisible(false);
+					document.getElementById(markerInfo[i].name)
+						.style.display = "none";
+				}
+			}
+			if(document.getElementById("checkbox-5-1").checked == true){
+				// markerInfo.length is the number of restaurants
+				for(var i = 0; i < markerInfo.length; i++){
+					gmarkers[i].setVisible(true);
+					document.getElementById(markerInfo[i].name)
+						.style.display = "block";
+				}
+			}
+		}
+	</script>
+  
+</head>
+
+<body onload="initialize()">
+
+	<!--[if lt IE 7]>
+		<p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+	<![endif]-->
+
+	<!--[if lt IE 7]>
+		<p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+	<![endif]-->
+	<header>
+		<div id="header">
+				<a href="#" id="help" class="helpm" ></a><a href="#" id="list"></a><a href="#" id="settings"></a>
+				<img id="alertLocation" src="img/loading.gif" alt="searching" >
+				<div id="rightbuttons">
+					<a href="#" id="mapZoomOut"></a><a href="#" id="mapZoomIn"></a><a href="#" id="findPosition"></a>
+				</div>	
+		</div> 
+	</header>
+
+	<!-- Restaurant list -->
+
+	<div id="help_screen">
+		<div id="top_stuff">
+			<h1><a href="#" title="eats_machine_logo" id="logo" alt="logo"></a>
+				<div id="social">
+					<a href="#" id="fb_share"></a>
+					<a href="#" id="twit_share"></a>
+				</div>
+			</h1>
+		</div>
+		<div id="homeinfo">
+			<ul class="homeprofile_tabs">
+				<li><a href="#" title="homecontent_1" class="hometab homeactive">About</a></li>
+				<li><a href="#" title="homecontent_2" class="hometab">FAQs</a></li>
+				<li><a href="#" title="homecontent_3" class="hometab">Contact</a></li>
+				<li><a href="#" title="homecontent_4" class="hometab">Stuff</a></li>
+			</ul>
+			<div id="homecontent_1" class="homecontent">
+				<p>Welcome to Eats Machine. The local mom and pop food finding app designed for people on the go who love to eat.</p>      	
+			</div>
+			<div id="homecontent_2" class="homecontent">
+				<p>No questions please.</p>
+			</div>
+			<div id="homecontent_3" class="homecontent">
+				<p>Call deez nuts.</p>
+			</div>
+			<div id="homecontent_4" class="homecontent">
+				<p>Stuff!</p>
+			</div>
+		</div>
+		<div id="homefooter"><a href="#" id="start"></a></div>
+		<footer>
+			<span>Hit us up!:</span>
+			<a href="" >Facebook</a>
+			<a href="" >Twitter</a>
+			&middot;
+			<span class="copy">© 2013 Eats Machine</span>
+		</footer>
+	</div>
+
+	<div id="settings_screen">
+		<form id="options">
+			<ul id="critpick">
+				<h2>Toggle All</h2>
+				<div class="somespace">
+					<li><input type="checkbox" id="checkbox-5-1" class="regular-checkbox" onClick="toggle(this)" value="1" checked/> <label for="checkbox-5-1"></label>On/Off</a></li>
+				</div>
+			</ul>
+			<ul id="critpick">
+				<h2>This Week's Picks</h2>
+				<div class="somespace">
+					<li><input type="checkbox" id="checkbox-4-1" class="regular-checkbox" name="topgrub" value="1" checked/><label for="checkbox-4-1"></label>Show 'em</a></li>
+				</div>
+			</ul>
+			
+			<ul id="stars">
+				<h2>Rating</h2>
+				<div class="somespace">
+					<li><input type="checkbox" id="checkbox-1-1" class="regular-checkbox" name="rating" value="1" checked="yes"/><label for="checkbox-1-1"></label>unrated</li>
+					<li><input type="checkbox" id="checkbox-1-2" class="regular-checkbox" name="rating" value="2" checked="yes" onClick="toggleRating(2)"/><label for="checkbox-1-2"></label><img src="http://nycfoodmap.com/images/st.png"></li>
+					<li><input type="checkbox" id="checkbox-1-3" class="regular-checkbox" name="rating" value="3" checked="yes" onClick="toggleRating(3)"/><label for="checkbox-1-3"></label><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"></li>
+					<li><input type="checkbox" id="checkbox-1-4" class="regular-checkbox" name="rating" value="4" checked="yes" onClick="toggleRating(4)"/><label for="checkbox-1-4"></label><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"></li>
+					<li><input type="checkbox" id="checkbox-1-5" class="regular-checkbox" name="rating" value="5" checked="yes" onClick="toggleRating(5)"/><label for="checkbox-1-5"></label><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"></li>
+					<li><input type="checkbox" id="checkbox-1-6" class="regular-checkbox" name="rating" value="6" checked="yes" onClick="toggleRating(6)"/><label for="checkbox-1-6"></label><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"><img src="http://nycfoodmap.com/images/st.png"></li>
+				</div>
+			</ul>
+
+			<ul id="cost">
+				<h2>Cost</h2>
+				<div class="somespace">
+					<li><input type="checkbox" id="checkbox-2-1" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-2-1"></label>$</li>
+					<li><input type="checkbox" id="checkbox-2-2" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-2-2"></label>$$</li>
+					<li><input type="checkbox" id="checkbox-2-3" class="regular-checkbox" name="cost" value="3" checked><label for="checkbox-2-3"></label>$$$</li>
+					<li><input type="checkbox" id="checkbox-2-4" class="regular-checkbox" name="cost" value="4" checked><label for="checkbox-2-4"></label>$$$$</li>
+				</div>
+			</ul>
+
+			<ul id="cuisine-disp">
+				<h2>Filters</h2>
+				<div class="somespace">
+					<li><input type="checkbox" id="checkbox-3-7" class="regular-checkbox" name="cost" value="3" checked><label for="checkbox-3-7"></label>American</li>
+					<li><input type="checkbox" id="checkbox-3-14" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-3-14"></label>Artichoke</li>
+					<li><input type="checkbox" id="checkbox-3-15" class="regular-checkbox" name="cost" value="3" checked><label for="checkbox-3-15"></label>Bagels</li>
+					<li><input type="checkbox" id="checkbox-3-15" class="regular-checkbox" name="cost" value="3" checked><label for="checkbox-3-15"></label>Bao</li>
+					<li><input type="checkbox" id="checkbox-3-6" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-3-6"></label>Beer me</li>
+					<li><input type="checkbox" id="checkbox-3-1" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-3-1"></label>Brazilian</li>
+					<li><input type="checkbox" id="checkbox-3-9" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-3-9"></label>Breakfast</li>
+					<li><input type="checkbox" id="checkbox-3-4" class="regular-checkbox" name="cost" value="4" checked><label for="checkbox-3-4"></label>Burgers</li>
+					<li><input type="checkbox" id="checkbox-3-2" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-3-2"></label>Caribbean</li>
+					<li><input type="checkbox" id="checkbox-3-10" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-3-10"></label>Crepe</li>
+					<li><input type="checkbox" id="checkbox-3-16" class="regular-checkbox" name="cost" value="4" checked><label for="checkbox-3-16"></label>Diner</li>
+					<li><input type="checkbox" id="checkbox-3-17" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-3-17"></label>French</li>
+					<li><input type="checkbox" id="checkbox-3-8" class="regular-checkbox" name="cost" value="4" checked><label for="checkbox-3-8"></label>Hamburgers</li>
+					<li><input type="checkbox" id="checkbox-3-10" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-3-10"></label>Hot Dog</li>
+					<li><input type="checkbox" id="checkbox-3-13" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-3-13"></label>Indian</li>
+					<li><input type="checkbox" id="checkbox-3-18" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-3-18"></label>Meatball</li>
+					<li><input type="checkbox" id="checkbox-3-13" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-3-13"></label>Mediterranean</li>
+					<li><input type="checkbox" id="checkbox-3-19" class="regular-checkbox" name="cost" value="3" checked><label for="checkbox-3-19"></label>Mexican</li>
+					<li><input type="checkbox" id="checkbox-3-5" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-3-5"></label>Newcard Spot</li>
+					<li><input type="checkbox" id="checkbox-3-9" class="regular-checkbox" name="cost" value="1" checked><label for="checkbox-3-9"></label>Pizza</li>
+					<li><input type="checkbox" id="checkbox-3-20" class="regular-checkbox" name="cost" value="4" checked><label for="checkbox-3-20"></label>Sandwiches</li>
+					<li><input type="checkbox" id="checkbox-3-16" class="regular-checkbox" name="cost" value="4" checked><label for="checkbox-3-16"></label>Sit Down</li>
+					<li><input type="checkbox" id="checkbox-3-11" class="regular-checkbox" name="cost" value="3" checked><label for="checkbox-3-11"></label>Specialty</li>
+					<li><input type="checkbox" id="checkbox-3-11" class="regular-checkbox" name="cost" value="3" checked><label for="checkbox-3-11"></label>Teriyaki/li>
+					<li><input type="checkbox" id="checkbox-3-12" class="regular-checkbox" name="cost" value="4" checked><label for="checkbox-3-12"></label>Vegetarian</li>
+					<li><input type="checkbox" id="checkbox-3-14" class="regular-checkbox" name="cost" value="2" checked><label for="checkbox-3-14"></label>Veg Option</li>
+
+				</div>
+			</ul>
+
+			<!-- <div id="cuisine-disp">
+				<h2>Cuisine</h2>
+				<select class="select" title="Select one">
+					<option ></option>
+					<option value="Afghani">Afghani</option>
+					<option value="African/Moroccan">African/Moroccan</option>
+					<option value="American Nouveau">American Nouveau</option>
+					<option value="American Traditional">American Traditional</option>
+					<option value="Asian: Southeast">Asian: Southeast</option>
+					<option value="Australian">Australian</option>
+					<option value="BBQ">BBQ</option>
+					<option value="Belgian">Belgian</option>
+					<option value="Bistro">Bistro</option>
+					<option value="Brazilian">Brazilian</option>
+					<option value="Cafes">Cafes</option>
+					<option value="Cajun/Creole">Cajun/Creole</option>
+					<option value="Caribbean">Caribbean</option>
+					<option value="Chinese">Chinese</option>
+					<option value="Coffeehouse">Coffeehouse</option>
+					<option value="Diner">Diner</option>
+					<option value="Eastern European">Eastern European</option>
+					<option value="Eclectic/Global">Eclectic/Global</option>
+					<option value="Food Cart">Food Cart</option>
+					<option value="French">French</option>
+					<option value="Gastropub">Gastropub</option>
+					<option value="German/Austrian">German/Austrian</option>
+					<option value="Greek">Greek</option>
+					<option value="Hamburgers">Hamburgers</option>
+					<option value="Health Food">Health Food</option>
+					<option value="Hot Dogs">Hot Dogs</option>
+					<option value="Indian">Indian</option>
+					<option value="Irish/English">Irish/English</option>
+					<option value="Italian">Italian</option>
+					<option value="Japanese/Sushi">Japanese/Sushi</option>
+					<option value="Juice/Smoothie">Juice/Smoothie</option>
+					<option value="Korean">Korean</option>
+					<option value="Latin American">Latin American</option>
+					<option value="Mexican">Mexican</option>
+					<option value="Middle Eastern">Middle Eastern</option>
+					<option value="Molecular Gastronomy">Molecular Gastronomy</option>
+					<option value="Pizza">Pizza</option>
+					<option value="Portuguese">Portuguese</option>
+					<option value="Russian">Russian</option>
+					<option value="Scandinavian">Scandinavian</option>
+					<option value="Seafood">Seafood</option>
+					<option value="Soup & Sandwich">Soup & Sandwich</option>
+					<option value="South American">South American</option>
+					<option value="Southern/Soul">Southern/Soul</option>
+					<option value="Southwest">Southwest</option>
+					<option value="Spanish/Tapas">Spanish/Tapas</option>
+					<option value="Steakhouse">Steakhouse</option>
+					<option value="Thai">Thai</option>
+					<option value="Theme Restaurant">Theme Restaurant</option>
+					<option value="Turkish">Turkish</option>
+					<option value="Vegetarian/Vegan">Vegetarian/Vegan</option>
+					<option value="Vietnamese">Vietnamese</option>
+				</select>
+			</div> -->
+		</form>
+	</div>			
+
+
+	<div id="the_list">
+
+		<ul id="selectspot">
+			<li class="list_prof" id="Baohaus">
+				<div>
+					<a href="javascript:myclick(0)"><h4 class="proname">Baohaus</h4></a>
+					<p class="cat">Taiwanese | $</p>
+				</div>
+			</li>
+
+			<li class="list_prof" id="Num Pang">
+				<a href="javascript:myclick(1)"><h4 class="proname">Num Pang Sandwich Shop</h4></a>
+				<span class="cat">Cambodian</span><br>
+			</li>
+
+			<li class="list_prof" id="Murray's Bagels">
+				<a href="javascript:myclick(2)"><b>Murray's Bagels</b></a><br>
+				<span class="cat">American</span>
+			</li>
+
+			<li class="list_prof" id="BLT Burger">
+				<a href="javascript:myclick(3)"><b>BLT Burger</b></a><br>
+				<span class="cat">Burgers</span>
+			</li>
+
+			<li class="list_prof" id="Dogmatic Restaurant">
+				<a href="javascript:myclick(4)"><b>Dogmatic Restaurant</b></a><br>
+				<span class="cat">Hot Dogs</span>
+			</li>
+
+			<li class="list_prof" id="Meatball Obsession">
+				<a href="javascript:myclick(5)"><b>Meatball Obsession</b></a><br>
+				<span class="cat">Italian</span>
+			</li>
+
+			<li class="list_prof" id="Mapi Expresso And Sandwich Bar">
+				<a href="javascript:myclick(6)"><b>Mapi Expresso And Sandwich Bar</b></a><br>
+				<span class="cat">Sandwiches</span>
+			</li>
+
+			<li class="list_prof" id="Tortaria">
+				<a href="javascript:myclick(7)"><b>Tortaria</b></a><br>
+				<span class="cat">Mexican</span>
+			</li>
+
+			<li class="list_prof" id="The Grey Dog's Coffee">
+				<a href="javascript:myclick(8)"><b>The Grey Dog's Coffee</b></a><br>
+				<span class="cat">Sandwiches</span>
+			</li>
+
+			<li class="list_prof" id="Vive La Crepe">
+				<a href="javascript:myclick(9)"><b>Vive La Crepe</b></a><br>
+				<span class="cat">French</span>
+			</li>
+
+			<li class="list_prof" id="Otafuku">
+				<a href="javascript:myclick(10)"><b>Otafuku</b></a><br>
+				<span class="cat">Japanese</span>
+			</li>
+
+			<li class="list_prof" id="The Kati Roll Company">
+				<a href="javascript:myclick(11)"><b>The Kati Roll Company</b></a><br>
+				<span class="cat">Indian</span>
+			</li>
+
+			<li class="list_prof" id="Artichoke Basille's Pizza">
+				<a href="javascript:myclick(12)"><b>Artichoke Basille's Pizza</b></a><br>
+				<span class="cat">Pizza</span>
+			</li>
+
+		</ul>
+
+	</div>
+
+	<div id="map">
+		<div id="map_canvas"></div>
+	</div>
+
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+
+	<script>
+		$("a#start").click(function () {
+			$("a#help").toggleClass("activem");
+			$("a#help").toggleClass("helpm");
+			$("div#help_screen").slideToggle("slow");
+		});
+		$("a#help").click(function () {
+			$(this).toggleClass("activem");
+			$(this).toggleClass("helpm");
+		});
+		
+		$("a#list").click(function () {
+			$("div#the_list").slideToggle("slow");
+			$("div#settings_screen").slideUp("slow");
+		});
+
+		$("a#settings").click(function () {
+			$("div#settings_screen").slideToggle("slow");
+			$("div#the_list").slideUp("slow");
+		});
+
+		$("div#close_settings").click(function () {
+			$("div#settings_screen").slideToggle("slow");
+		});
+
+
+		$("a#help").click(function () {
+			$("div#help_screen").slideToggle("slow");
+		});
+
+		if (screen.width < 600) {
+			$("div#the_list a").click(function () {
+				$("div#the_list").slideToggle("slow");
+			});
+
+			$("div#close_help").click(function () {
+				$("div#help_screen").slideToggle("slow");
+			});
+
+			$("a#findPosition").click(function () {
+				$("div#settings_screen").slideUp("slow");
+				$("div#the_list").slideUp("slow");
+			});
+		}
+
+
+	</script>
+
+	<!-- Google Analytics: change UA-XXXXX-X to be your site's ID. -->
+	<script>
+		var _gaq = [
+			['_setAccount', 'UA-XXXXX-X'],
+			['_trackPageview']
+		];
+		(function (d, t) {
+			var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+			g.src = ('https:' == location.protocol ? '//ssl' : '//www') + '.google-analytics.com/ga.js';
+			s.parentNode.insertBefore(g, s)
+		}(document, 'script'));
+	</script>
+</body>
+</html>
